@@ -1,4 +1,3 @@
-
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 
@@ -16,7 +15,7 @@ public class UDPServer {
 			// UDP 통신으로 전송을 받을 packet 객체생성
 			DatagramPacket dp = new DatagramPacket(date, date.length);
 
-			System.out.println("데이터 수신 준비 완료....");
+			System.out.println("데이터 수신 준비 완료.....");
 			while (true) {
 				// 데이터 전송 받기
 				dsoc.receive(dp);
