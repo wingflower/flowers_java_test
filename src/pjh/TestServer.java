@@ -40,7 +40,7 @@ public class TestServer {
 			logger.info("Accepting connections on port " + server.getLocalPort());
 			while (true) {
 				try {
-					System.out.println("서버가 요청을 기다립니다.");
+					System.out.println("Server is waiting...");
 					Socket socket = server.accept();
 
 					Runnable r = new RequestProcessor(socket);
@@ -68,11 +68,9 @@ public class TestServer {
 			BufferedReader br = null;
 
 			try {
-				// [3]클라이언트 IP구하고
 				InetAddress addr = connection.getInetAddress();
-				// 소켓 안에 있는 클라이언트의 아이피를 얻어올수 있다.
 				String ip = addr.getHostAddress();
-				System.out.println(ip + "의 클라이언트가 접속했습니다.");
+				System.out.println(ip + "is connected");
 				jedis.set("SENDER_IP", ip);
 
 				System.out.println("jedis SENDER_IP Value : " + jedis.get("SENDER_IP"));
@@ -94,21 +92,15 @@ public class TestServer {
 				// jedis.close();
 				// }
 
-				// [4]in, out Stream구하기 1
 				InputStream is = connection.getInputStream(); // Stream
 				InputStreamReader isr = new InputStreamReader(is); // char
 				br = new BufferedReader(isr); // String
-				// br.readLine()을 쓰자.
 
 				OutputStream os = connection.getOutputStream(); // Stream
 				OutputStreamWriter osw = new OutputStreamWriter(os); // char
 				pw = new PrintWriter(osw); // String
-				// pw.println()을 쓰자.
 
-				// 서버에서는 클라이언트가 보낸 문자열을 읽어서 그대로 보내자.
 				String msg = null;
-
-				// main쓰레드가 클라이언트 하나(한개의 소켓)에 대해서만 반복(while)하고있다.
 				while ((msg = br.readLine()) != null) { // main쓰레드.
 					if (msg.equals("quit"))
 						break; // "quit"입력시 종료.
@@ -121,7 +113,7 @@ public class TestServer {
 				}
 
 			} catch (IOException e) {
-				System.out.println("서버가 준비되지 않았습니다." + e.getMessage());
+				System.out.println("Server setting error" + e.getMessage());
 			} finally {
 				try {
 					if (pw != null)
