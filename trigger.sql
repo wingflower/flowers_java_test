@@ -6,9 +6,7 @@ CREATE OR REPLACE FUNCTION notify_create_table()
 $func$
 BEGIN
 
-EXECUTE format('
-   NOTIFY mymessage, test
-   ');
+PERFORM pg_notify('mymessage', 'new table');
 
 END
 $func$ LANGUAGE plpgsql;
