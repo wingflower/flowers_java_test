@@ -1,4 +1,4 @@
-package kbj;
+package sender;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -9,6 +9,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SenderImpl {
 	
@@ -30,7 +32,7 @@ public class SenderImpl {
 		String collectorIp = collectorAddress[0];
 		int collectorPort = Integer.parseInt(collectorAddress[1].trim());
 				
-		// it keep checking the connection till it connects to the collector
+		// it keeps checking the connection till it connects to the collector
 		checkConnection(collectorIp, collectorPort, senderId);
 		
 		// it starts to send logs
@@ -55,42 +57,48 @@ public class SenderImpl {
 			System.out.println(ia.getHostAddress() + " address's been generated.");
 
 			// it sends the msg to the mgmt
-			sendPacket(ia, msg, dsoc, mgmtPort);
+			//sendPacket(ia, msg, dsoc, mgmtPort);
+			
+			ExecutorService executor = Executors.newSingleThreadExecutor();
+//			executor.execute(sendPacketRunnable(ia, msg, dsoc, mgmtPort));
+			executor.submit(sendPacketRunnable(ia, msg, dsoc, mgmtPort));
 			
 			/**********************************
 			 * Wait for data
 			 **********************************/
 			System.out.println("waitong for data from the mgmt");
-			while (true) {
+			
 //				sendPacket(ia, msg, dsoc);
-				
+		
 //				byte[] buffer = new byte[msg.getBytes().length];
-				byte[] buffer = new byte[1024];
+			byte[] buffer = new byte[1024];
 
-				// it receives data
-				DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
-				dsoc.receive(receivePacket);
+			// it receives data
+			DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
+			dsoc.receive(receivePacket);
 
-				// it prints the received data
-				String receviedMsg = new String(receivePacket.getData(), 0, receivePacket.getData().length);
-				System.out.println("The received data : " + receviedMsg);
+			// it prints the received data
+			String receviedMsg = new String(receivePacket.getData(), 0, receivePacket.getData().length);
+			System.out.println("The received data : " + receviedMsg);
+			
+			
+			if(receviedMsg.isEmpty() == false) {
+				System.out.println("The mgmt's been connected ");
+
+				// TODO : it needs a if line to check right ids
 				
+				String[] splitReceivedMsg = receviedMsg.split(",");
+				Map<String, String> result = new HashMap<>();
+				result.put("collectorId", splitReceivedMsg[0]);
+				result.put("senderId", splitReceivedMsg[1]);
+				result.put("collectorIp", splitReceivedMsg[2]);
 				
-				if(receviedMsg.isEmpty() == false) {
-					System.out.println("The mgmt's been connected ");
-					
-					String[] splitReceivedMsg = receviedMsg.split(",");
-					Map<String, String> result = new HashMap<>();
-					result.put("collectorId", splitReceivedMsg[0]);
-					result.put("senderId", splitReceivedMsg[1]);
-					result.put("collectorIp", splitReceivedMsg[2]);
-					
-					dsoc.close();
-					return result;
-				}
+				executor.shutdownNow();
 				
-				Thread.sleep(500);
+				dsoc.close();
+				return result;
 			}
+				
 		} catch (Exception e) {
 			System.out.println(e.getMessage());
 		}
@@ -108,30 +116,46 @@ public class SenderImpl {
 		InetAddress ia = InetAddress.getByName(ip);
 		DatagramSocket dsoc = new DatagramSocket();
 		
-		DatagramPacket dp = new DatagramPacket(senderId.getBytes(), senderId.getBytes().length, ia, port);
 		
-		while(true) {
-			dsoc.send(dp);
-			
-			byte[] buffer = new byte[1024];
-			// 반송되는 DatagramPacket을 받기 위해 receivePacket 생성한 후 대기
-			DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
-			dsoc.receive(receivePacket);
-
-			// 받은 결과 출력
-			String receviedMsg = new String(receivePacket.getData(), 0, receivePacket.getData().length);
-			System.out.println("전송받은 문자열 : " + receviedMsg);
-			
-			
-			if(receviedMsg.isEmpty() == false) {
-				System.out.println("collector 연결 확인 ");
-				
-				dsoc.close();
-				break;
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		
+		Runnable runnable = new Runnable() {
+			@Override
+			public void run() {
+				while(!Thread.currentThread().isInterrupted()) {
+					DatagramPacket dp = new DatagramPacket(senderId.getBytes(), senderId.getBytes().length, ia, port);
+					try {
+						dsoc.send(dp);
+						System.out.println("Request ids with the parameter, " + senderId);
+						Thread.sleep(1000);
+					} catch (IOException e) {
+						e.printStackTrace();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
 			}
-			
-			Thread.sleep(500);
+		};
+
+		executorService.submit(runnable);
+				
+		
+		byte[] buffer = new byte[1024];
+		// 반송되는 DatagramPacket을 받기 위해 receivePacket 생성한 후 대기
+		DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
+		dsoc.receive(receivePacket);
+
+		// 받은 결과 출력
+		String receviedMsg = new String(receivePacket.getData(), 0, receivePacket.getData().length);
+		System.out.println("Received data : " + receviedMsg);
+		
+		
+		if(receviedMsg.isEmpty() == false) {
+			System.out.println("it's connected to the collector ");
+			executorService.shutdownNow();
+			dsoc.close();
 		}
+		
 	}
 	
 	/**
@@ -165,6 +189,7 @@ public class SenderImpl {
 			msg = String.format("[LOG %s]%s,%s", date, name[ran], work[ran]);
 			dp = new DatagramPacket(msg.getBytes(), msg.getBytes().length, ia, port);
 			dsoc.send(dp);
+			System.out.println("Sent data : " + msg);
 			Thread.sleep((ran+1) * 1000);
 		}
 		
@@ -178,18 +203,52 @@ public class SenderImpl {
 	 * @param dsoc
 	 * @throws IOException
 	 */
-	public static void sendPacket(InetAddress ia, String msg, DatagramSocket dsoc, int port) throws IOException {
-		DatagramPacket dp = new DatagramPacket(msg.getBytes(), msg.getBytes().length, ia, port);
-		dsoc.send(dp);
-		
-		StringBuilder sb = new StringBuilder();
-		sb.append("[ ");
-		sb.append(msg);
-		sb.append(" ]");
-		sb.append(" was sent to ");
-		sb.append(ia.getHostAddress());
-		
-		System.out.println(sb.toString());
+//	public static void sendPacket(InetAddress ia, String msg, DatagramSocket dsoc, int port) throws IOException {
+//		DatagramPacket dp = new DatagramPacket(msg.getBytes(), msg.getBytes().length, ia, port);
+//		dsoc.send(dp);
+//		
+//		StringBuilder sb = new StringBuilder();
+//		sb.append("[ ");
+//		sb.append(msg);
+//		sb.append(" ]");
+//		sb.append(" was sent to ");
+//		sb.append(ia.getHostAddress());
+//		
+//		System.out.println(sb.toString());
+//	}
+	
+	private static Runnable sendPacketRunnable(InetAddress ia, String msg, DatagramSocket dsoc, int port) {
+		return new Runnable() {
+			
+			@Override
+			public void run() {
+				DatagramPacket dp = new DatagramPacket(msg.getBytes(), msg.getBytes().length, ia, port);
+				
+				while(!Thread.currentThread().isInterrupted()) {
+					try {
+						dsoc.send(dp);
+					} catch (IOException e) {
+						System.err.println("it's failed to send the data");
+					}
+					
+					StringBuilder sb = new StringBuilder();
+					sb.append("[ ");
+					sb.append(msg);
+					sb.append(" ]");
+					sb.append(" was sent to ");
+					sb.append(ia.getHostAddress());
+					
+					System.out.println(sb.toString());
+					
+					try {
+						Thread.sleep(2000);
+					} catch (InterruptedException e) {
+						
+					}
+				}
+				
+			}
+		};
 	}
 
 	/**
